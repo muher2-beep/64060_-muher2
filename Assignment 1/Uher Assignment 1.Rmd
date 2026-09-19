@@ -1,0 +1,44 @@
+---
+title: "Uher Assignment 1"
+author: "Michael Uher"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  pdf_document: default
+---
+Opening the data retrieved from MAVEN ANALYTICS at https://mavenanalytics.io/data-playground/apple-s-greenhouse-gas-emissions
+
+```{r}
+library(readxl)
+greenhouse_gas_emissions <- read_excel("C:/Users/Mike/Downloads/Apple+Emissions/apple_emissions/greenhouse_gas_emissions.xlsx")
+View(greenhouse_gas_emissions)
+```
+
+Showcasing descriptive statistics for both the quantitative variable of "Emissions" as well as the qualitative variables "Category" and "Type" using the summary and table commands
+
+```{r}
+summary(greenhouse_gas_emissions$Emissions)
+table(greenhouse_gas_emissions$Category)
+table(greenhouse_gas_emissions$Type)
+```
+
+Transforming the "Emissions" variable by dividing it by 1000, creating the variable "Emissions_in_Thousands" to make the large numbers easier to view
+
+```{r}
+greenhouse_gas_emissions$Emissions_in_thousands = greenhouse_gas_emissions$Emissions/1000
+head(greenhouse_gas_emissions$Emissions_in_thousands)
+```
+
+
+Plotting the variables "Fiscal Year" and "Emissions_in_thousands" in a histogram titled "Distribution of Emissions". "Emissions_in_thousands" was used for an easier to view graph.
+
+```{r}
+hist(greenhouse_gas_emissions$Emissions_in_thousands,main = "Distribution of Emissions",xlab = "Emissions(in thousands)",ylab = "Frequency")
+```
+
+
+Plotting the variables "Emissions_in_thousands" and "Fiscal Year" into a scatter plot titled "Emissions per Year".
+
+```{r}
+plot(greenhouse_gas_emissions$`Fiscal Year`,greenhouse_gas_emissions$Emissions_in_thousands, main = "Emissions per Year",xlab = "Fiscal Year", ylab = "Emissions (in thousands)")
+```
