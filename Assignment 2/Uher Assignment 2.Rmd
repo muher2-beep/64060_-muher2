@@ -1,0 +1,130 @@
+---
+title: "Uher Assignment 2"
+author: "Michael Uher"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+#SETUP
+
+Importing provided data "UniversalBank.xlsx".
+
+```{r}
+library(caret)
+library(class)
+library(readxl)
+
+UniversalBank <- read_excel("C:/Users/Mike/Downloads/UniversalBank.xlsx")
+```
+
+Splitting the dataset into 60% training data and 40% testing data.
+
+```{r}
+set.seed(123)
+
+Train_Index <- createDataPartition(UniversalBank$`Personal Loan`, p = 0.60, list = FALSE)
+
+Train <- UniversalBank[Train_Index, ]
+Test <- UniversalBank[-Train_Index, ]
+```
+
+Removing the ID and ZIP Code columns from the training and testing data, as well as splitting up the Education variable into 3 variables for easier identification and removing the old variable.
+
+```{r}
+Train <- Train[, !(names(Train) %in% c("ID", "ZIP Code"))]
+Test <- Test[, !(names(Test) %in% c("ID", "ZIP Code"))]
+
+Train$Education_1 <- ifelse(Train$Education == 1, 1, 0)
+Train$Education_2 <- ifelse(Train$Education == 2, 1, 0)
+Train$Education_3 <- ifelse(Train$Education == 3, 1, 0)
+
+Test$Education_1 <- ifelse(Test$Education == 1, 1, 0)
+Test$Education_2 <- ifelse(Test$Education == 2, 1, 0)
+Test$Education_3 <- ifelse(Test$Education == 3, 1, 0)
+
+Train$Education <- NULL
+Test$Education <- NULL
+```
+
+Creation of predictor variables without the "Personal Loan" variable, and response variables.
+
+```{r}
+Train_Predictors <- Train[, names(Train) != "Personal Loan"]
+Test_Predictors <- Test[, names(Test) != "Personal Loan"]
+
+Train_Y <- factor(Train$`Personal Loan`)
+Test_Y <- factor(Test$`Personal Loan`)
+```
+
+Standardizing the variables to give them equal weight and create the response variable.
+
+```{r}
+preprocess <- preProcess(Train_Predictors, method = c("center", "scale"))
+
+Train_Normalized <- predict(preprocess, Train_Predictors)
+Test_Normalized <- predict(preprocess, Test_Predictors)
+```
+
+Creating the final training data.
+
+```{r}
+Train_Final <- data.frame( Train_Normalized, 'Personal Loan' = Train_Y)
+```
+
+#Question 1
+
+Create the customer listed in question 1 and order the columns properly.
+
+```{r}
+Customer1 <- data.frame(Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Mortgage = 0, 'Securities Account' = 0, 'CD Account' = 0, Online = 1, CreditCard = 1, Education_1 = 0,  Education_2 = 1, Education_3 = 0, check.names = FALSE)
+
+Customer1 <- Customer1[, names(Train_Predictors)]
+```
+
+Normalizing the customer data and doing a kNN analysis where k = 1.
+
+```{r}
+Customer1_Normalized <- predict(preprocess, Customer1)
+
+Customer1_KNN <- knn(Train_Normalized, Customer1_Normalized, Train_Y, k = 1)
+
+Customer1_KNN
+```
+The Customer with the data given above would be classified as not being accepted for the loan.
+
+#Question 2
+
+Testing k of different values with the same seed to find the best possible k value.
+```{r}
+set.seed(123)
+
+suppressWarnings(Test_KNN <-train(Train_Normalized,Train_Y, method="knn", tuneGrid=expand.grid(k=c(1:20))))
+
+suppressWarnings(Test_KNN)
+```
+Out of the range 1:20, it is found that k = 1 is the best value of k with the highest accuracy.
+
+#Question 3
+
+Creating a confusion matrix showing the performance of the best value of k using the validation data.
+```{r}
+Test_Predictions <- knn(train = Train_Normalized, test = Test_Normalized, cl = Train_Y, k = 1)
+
+Confusion_Matrix <- confusionMatrix(Test_Predictions, Test_Y, positive = "1")
+Confusion_Matrix
+
+table(Predicted = Test_Predictions, Actual = Test_Y)
+```
+Overall accuracy is about 96.4%, better than the baseline accuracy of 90.4% from the problem.
+
+#Question 4
+
+Predicting the customer listed with a value of k = 1.
+```{r}
+Customer1_BestK <- knn(train = Train_Normalized, test = Customer1_Normalized, cl = Train_Y, k = 1)
+Customer1_BestK
+
+```
+The customer listed would not be accepted for a loan.
