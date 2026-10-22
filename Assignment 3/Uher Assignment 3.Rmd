@@ -1,0 +1,142 @@
+---
+title: "Uher Assignment 3"
+author: "Michael Uher"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+#SETUP
+
+Importing provided data and loading libraries.
+```{r}
+# 1. Load the data ------------------------------------------
+library(e1071)
+library(readxl)
+UniversalBank <- read_excel("C:/Users/Mike/Downloads/UniversalBank.xlsx")
+View(UniversalBank)
+```
+
+Create a variable for the credit card value and then separate the data into training and testing data.
+```{r}
+
+UniversalBank$CC <- UniversalBank$CreditCard
+
+set.seed(123)
+
+Train_Index <- sample(seq_len(nrow(UniversalBank)),size = 3000)
+
+Training <- UniversalBank[Train_Index, ]
+Test <- UniversalBank[-Train_Index, ]
+```
+
+#Question A
+
+Creation of a pivot table with "CC" variable as the rows and "Online" and "Personal Loan" variables as columns.
+```{r}
+Pivot_A <-xtabs(~ CC+`Personal Loan`+Online, data=Training)
+```
+
+Organizing the rows and columns of the pivot table then printing the results.
+```{r}
+Pivot_A <-ftable(Pivot_A, row.vars=c("CC", "Personal Loan"), col.vars = "Online")
+
+print(Pivot_A)
+```
+
+
+
+#Question B
+
+Extracting the counts from the pivot table and then calculating the probability.
+```{r}
+Pivot_A_Counts <-xtabs(~ CC+`Personal Loan`+Online, data=Training)
+
+Probability_B <-Pivot_A_Counts["1","1","1"]/sum(Pivot_A_Counts["1", ,"1"])
+
+print(Probability_B)
+
+```
+The probability the customer will accept the loan offer is roughly 10.7%
+
+
+#Question C
+
+Creating two separate pivot tables, the first having "Personal Loan" as rows and "Online" as columns and the other having "Personal Loan" as rows and "CC" as columns.
+```{r}
+Pivot_Online <-table(`Personal Loan`=Training$`Personal Loan`, Online=Training$Online)
+print(Pivot_Online)
+
+pivot_cc <-table(`Personal Loan`=Training$`Personal Loan`, CC=Training$CC)
+print(pivot_cc)
+
+```
+
+#Question D
+
+Creating variables calculating the six probabilities.
+```{r}
+P1 <-mean(Training$CC[Training$`Personal Loan`==1]==1)
+P2 <-mean(Training$Online[Training$`Personal Loan`==1]==1)
+P3 <-mean(Training$`Personal Loan`==1)
+P4 <-mean(Training$CC[Training$`Personal Loan`==0]==1)
+P5 <-mean(Training$Online[Training$`Personal Loan`==0]==1)
+P6 <-mean(Training$`Personal Loan`== 0)
+```
+
+Collecting the results in a single variable and displaying them.
+```{r}
+Results <- c("i."=P1, "ii." = P2, "iii."=P3, "iv."=P4, "v."=P5, "vi." = P6)
+
+print(round(Results, 6))
+```
+
+#Question E
+
+Combining the results from Question D to be put into the Naive Bayes formula.
+```{r}
+NB1 <-P1*P2*P3
+NB2 <-P4*P5*P6
+Probability_E <-NB1/(NB1+NB2)
+print(Probability_E)
+```
+
+#Question F
+
+The Naive Bayes model is more accurate because it has a better percentage compared to the original data set.
+
+
+#Question G
+
+All entries are needed for computing P(Loan = 1 | CC = 1, Online = 1).
+
+Converting variables for classification then training the Naive Bayes model using "CC" and "Online".
+```{r}
+Training$`Personal Loan` <-factor(Training$`Personal Loan`, levels=c(0,1))
+
+Test$`Personal Loan` <-factor(Test$`Personal Loan`, levels=c(0,1))
+
+NB_Model <- naiveBayes(`Personal Loan`~CC+Online,data=Training)
+
+#print(NB_Model)
+
+#print(NB_Model$tables)
+
+#print(NB_Model$apriori)
+```
+
+Predicting the probabilities on the "Test" data using customers with CC = 1 and Online = 1
+```{r}
+NB_Predictions <-predict(NB_Model, newdata=Test, type="raw")
+
+Selected <-Test$CC==1&Test$Online==1
+
+print(head(NB_Predictions[Selected, , drop = FALSE]))
+```
+[1,1] = 0.1156935
+Probability from Question E: [1] 0.1105637
+
+We achieved a slightly higher percentage from the Naive Bayes model trained on the training data.
+
+
