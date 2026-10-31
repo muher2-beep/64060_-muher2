@@ -1,0 +1,87 @@
+---
+title: "Uher Assignment 4"
+author: "Michael Uher"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+Import Data set and enable relevant libraries 
+```{r}
+library(readxl)
+library(factoextra)
+
+Pharmaceuticals <- read_excel("C:/Users/Mike/Downloads/Pharmaceuticals.xlsx")
+```
+
+
+Separating the numerical variables and scaling them
+```{r}
+Numeric_Vars <-c("Market_Cap", "Beta", "PE_Ratio", "ROE", "ROA", "Asset_Turnover", "Leverage", "Rev_Growth", "Net_Profit_Margin")
+
+X_Raw <-Pharmaceuticals[, Numeric_Vars]
+X_Scaled <-scale(X_Raw)
+```
+
+
+Comparing different k-values using the silhouette method and plotting the result on a graph
+```{r}
+set.seed(123)
+print(fviz_nbclust(X_Scaled, kmeans, method="silhouette", k.max=6, nstart=100))
+```
+
+
+Using 3 as the optimal number of clusters k that was found using the graph above.
+```{r}
+Final_Kmeans <-eclust(X_Scaled, "kmeans", k=3, graph=FALSE, nstart=100, seed=123)
+
+Cluster_Id <-Final_Kmeans$cluster
+```
+
+
+Plotting the clusters using the k means method due to the clusters having non complex shapes while using the k value of 3 from the data above.
+```{r}
+print(fviz_cluster(Final_Kmeans, data=X_Scaled, geom=c("point", "text"), stand=FALSE, main="PCA View of K-Means Clusters"))
+```
+
+
+#PART B
+Getting the average of all of the numerical variables within each cluster to analyze how the clusters formed.
+```{r}
+Cluster_Means <-aggregate(X_Raw, by=list(Cluster=Cluster_Id), FUN=mean)
+
+Cluster_Means[, -1] <-round(Cluster_Means[, -1], 2)
+
+print(Cluster_Means)
+```
+Cluster 1 has a high PE Ratio, high Asset Turnover, low Leverage, and low Net Profit Margin.
+Cluster 2 has a high Market Cap, low Beta, high ROE and ROA, high Asset Turnover, and low Leverage.
+Cluster 3 has a low Market Cap, Low PE Ratio, low Asset_Turnover, high Leverage, and High Rev Growth.
+
+
+#PART C
+Displaying the percentage of each of the remaining variables for each cluster to find patterns.
+```{r}
+Recommendation_Table <-table(Cluster=Cluster_Id, Recommendation=Pharmaceuticals$Median_Recommendation)
+print(round(100*prop.table(Recommendation_Table, margin=1), 1))
+
+Location_Table <-table(Cluster=Cluster_Id, Location=Pharmaceuticals$Location)
+print(round(100*prop.table(Location_Table, margin=1), 1))
+
+Exchange_Table <-table(Cluster=Cluster_Id, Exchange=Pharmaceuticals$Exchange)
+print(round(100*prop.table(Exchange_Table, margin=1), 1))
+```
+Cluster 1 and 2 are weighted stronger into Hold for Median Recommendation, Cluster 3 is weighted towards Moderate Buy.
+Cluster 1 is evenly weighted per location, cluster 2 and 3 is strongly weighted towards US.
+Cluster 1 and 2 are entirely on the NYSE, while cluster 3 has a third split between AMEX and NASDAQ.
+
+
+#PART D
+Assigning names to each cluster based on the values from part B and displaying the cluster each company belongs to in a table. Cluster 1 is "High Value, Low Growth Companies", Cluster 2 is "High Cap, High Profit Companies", and Cluster 3 is "Small-cap, High Leverage Companies".
+```{r}
+Cluster_Names <-c("High Value, Low Growth Companies", "High Cap, High Profit Companies", "Small-cap, High Leverage Companies")
+
+Cluster_Labels <-Cluster_Names[Cluster_Id]
+Cluster_Results <-data.frame(Name=Pharmaceuticals$Name, Cluster=Cluster_Id, Cluster_Name=Cluster_Labels)
+
+print(Cluster_Results)
+```
