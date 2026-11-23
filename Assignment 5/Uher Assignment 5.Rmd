@@ -1,0 +1,182 @@
+---
+title: "Uher Assignment 5"
+author: "Michael Uher"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+Load in the data provided titled "Cereals.xlsx"
+```{r}
+library(readxl)
+library(cluster)
+
+Cereals <-read_excel("C:/Users/Mike/Downloads/Cereals.xlsx")
+```
+
+
+Remove the cereals that have missing values.
+```{r}
+Original_Rows <-nrow(Cereals)
+
+Cereals_Clean <-na.omit(Cereals)
+rownames(Cereals_Clean) <-NULL
+```
+
+
+Scale the numerical variables using euclidean distance
+```{r}
+Numeric_Vars <-c("calories", "protein", "fat", "sodium", "fiber", "carbo", "sugars", "potass", "vitamins", "shelf", "weight", "cups", "rating")
+
+X_Raw <-Cereals_Clean[, Numeric_Vars]
+X_Scaled <-scale(X_Raw)
+
+Dist_Matrix <-dist(X_Scaled, method="euclidean")
+```
+
+
+Compare the hierarchical clustering methods using Agnes
+```{r}
+Linkage_Methods <-c("single", "complete", "average", "ward")
+
+Agnes_Fits <-setNames(lapply(Linkage_Methods, function(Method) agnes(X_Scaled, metric="euclidean", stand=FALSE, method=Method)), Linkage_Methods)
+
+Dendrograms <-lapply(Agnes_Fits, as.hclust)
+
+K_Candidates <-2:6
+
+Cluster_Comparison <-do.call(rbind, lapply(Linkage_Methods, function(Method){
+Hc <-Dendrograms[[Method]]
+do.call(rbind, lapply(K_Candidates, function(K){
+Cluster_Id <-cutree(Hc, k=K)
+Silhouette_Result <-silhouette(Cluster_Id, Dist_Matrix)
+data.frame(Method=Method, K=K, Average_Silhouette=mean(Silhouette_Result[, 3]), Cluster_Sizes=paste(sort(as.integer(table(Cluster_Id)), decreasing=TRUE), collapse=", "))}))}))
+
+Cluster_Comparison <-Cluster_Comparison[order(-Cluster_Comparison$Average_Silhouette), ]
+rownames(Cluster_Comparison) <-NULL
+
+Cluster_Comparison$Average_Silhouette <-round(Cluster_Comparison$Average_Silhouette, 3)
+
+print(Cluster_Comparison)
+```
+
+Selecting Average Linkage as the best method and 2 clusters according to the comparison above.
+```{r}
+Best_Row <-Cluster_Comparison[which.max(Cluster_Comparison$Average_Silhouette), ]
+
+Best_Method <-as.character(Best_Row$Method)
+Chosen_K <-as.integer(Best_Row$K)
+
+Final_HC <-Dendrograms[[Best_Method]]
+
+Final_Cluster_Id <-cutree(Final_HC, k=Chosen_K)
+
+Final_Silhouette <-silhouette(Final_Cluster_Id, Dist_Matrix)
+```
+
+Displaying the numerical characteristics of both clusters.
+```{r}
+Cluster_Profiles <-aggregate(X_Raw, by=list(Cluster_ID=Final_Cluster_Id), FUN=mean)
+
+Cluster_Profiles$Cereal_Count <-as.integer(table(Final_Cluster_Id)[as.character(Cluster_Profiles$Cluster_ID)])
+
+Cluster_Profiles <-Cluster_Profiles[, c("Cluster_ID", "Cereal_Count", Numeric_Vars)]
+
+Cluster_Profiles[Numeric_Vars] <-round(Cluster_Profiles[Numeric_Vars], 2)
+
+print(Cluster_Profiles)
+```
+
+Display how all of the cereals have been assigned.
+```{r}
+Cereal_Assignments <-data.frame(Cereal=Cereals_Clean$name, Manufacturer=Cereals_Clean$mfr, Type=Cereals_Clean$type, Cluster_ID=Final_Cluster_Id, Rating=Cereals_Clean$rating, Shelf=Cereals_Clean$shelf)
+
+Cereal_Assignments <-Cereal_Assignments[order(Cereal_Assignments$Cluster_ID, Cereal_Assignments$Cereal), ]
+
+print(Cereal_Assignments)
+```
+
+Test the cluster stability by partitioning the data into partition A and Partition B.
+```{r}
+set.seed(123)
+
+Partition_A_Index <-sample(seq_len(nrow(X_Scaled)), size=floor(nrow(X_Scaled)/2))
+
+X_A <-X_Scaled[Partition_A_Index, , drop=FALSE]
+X_B <-X_Scaled[-Partition_A_Index, , drop=FALSE]
+```
+
+Cluster the partitions, and assign partition B to centroids in partition A.
+```{r}
+Partition_A_HC <-agnes(X_A, metric="euclidean", stand=FALSE, method=Best_Method)
+Partition_A_Cluster <-cutree(as.hclust(Partition_A_HC), k=Chosen_K)
+
+print(table(Partition_A_Cluster))
+
+Partition_A_Centroids <-aggregate(as.data.frame(X_A), by=list(Cluster_ID=Partition_A_Cluster), FUN=mean)
+Centroid_Matrix <-as.matrix(Partition_A_Centroids[, Numeric_Vars])
+
+Partition_B_Cluster <-apply(X_B, 1, function(Record){Squared_Distances <-rowSums((Centroid_Matrix - matrix(Record, nrow=nrow(Centroid_Matrix), ncol=ncol(Centroid_Matrix), byrow=TRUE))^2)
+Partition_A_Centroids$Cluster_ID[which.min(Squared_Distances)]})
+
+Partition_B_Cluster <-as.integer(Partition_B_Cluster)
+```
+
+Compare the consistency of the partitions with the original data.
+```{r}
+Full_Data_B_Cluster <-Final_Cluster_Id[-Partition_A_Index]
+
+print(table(Full_Data_B_Cluster, Partition_B_Cluster))
+
+Adjusted_Rand_Index <-function(Cluster_1, Cluster_2){
+Contingency <-table(Cluster_1, Cluster_2)
+Choose_2 <-function(Number) Number*(Number-1)/2
+Combined_Index <-sum(Choose_2(Contingency))
+Row_Index <-sum(Choose_2(rowSums(Contingency)))
+Column_Index <-sum(Choose_2(colSums(Contingency)))
+Total_Pairs <-Choose_2(sum(Contingency))
+Expected_Index <-Row_Index*Column_Index/Total_Pairs
+Maximum_Index <-0.5*(Row_Index+Column_Index)
+(Combined_Index-Expected_Index)/(Maximum_Index-Expected_Index)}
+
+Stability_Score <-Adjusted_Rand_Index(Full_Data_B_Cluster, Partition_B_Cluster)
+
+print(round(Stability_Score, 3))
+```
+
+Identify the healthy cereals using the different nutritional variables, prioritizing healthier nutritional variables.
+```{r}
+Health_Vars <-c("calories", "protein", "fat", "sodium", "fiber", "sugars", "potass", "vitamins")
+Health_Z <-scale(Cereals_Clean[, Health_Vars])
+Health_Z[, c("calories", "fat", "sodium", "sugars")] <- -Health_Z[, c("calories", "fat", "sodium", "sugars")]
+
+Health_Score <-rowMeans(Health_Z)
+```
+
+Calculate the average health score for each cluster.
+```{r}
+Health_By_Cluster <-aggregate(Health_Score, by=list(Cluster_ID=Final_Cluster_Id), FUN=mean)
+names(Health_By_Cluster)[2] <-"Average_Health_Score"
+
+Health_By_Cluster <-Health_By_Cluster[order(-Health_By_Cluster$Average_Health_Score), ]
+Health_By_Cluster$Average_Health_Score <-round(Health_By_Cluster$Average_Health_Score, 3)
+
+print(Health_By_Cluster)
+```
+
+Select the cluster with the highest health cluster and display the cereals in the healthy cluster.
+```{r}
+Healthy_Cluster_Id <-Health_By_Cluster$Cluster_ID[1]
+
+Healthy_Indexes <-which(Final_Cluster_Id == Healthy_Cluster_Id)
+Healthy_Cereals <-Cereals_Clean[Healthy_Indexes, c("name", "mfr", "type", Health_Vars, "shelf", "rating")]
+Healthy_Cereals$Health_Score <-Health_Score[Healthy_Indexes]
+Healthy_Cereals$Cluster_ID <-Healthy_Cluster_Id
+
+Healthy_Cereals <-Healthy_Cereals[, c("name", "mfr", "type", "Cluster_ID", "Health_Score", Health_Vars, "shelf", "rating")]
+Healthy_Cereals[, c("Health_Score", Health_Vars, "rating")] <-round(Healthy_Cereals[, c("Health_Score", Health_Vars, "rating")], 2)
+
+print(Healthy_Cereals)
+```
+Yes, the data should be normalized due to variables like calories, protein, and sodium all having very different units of measurement.
